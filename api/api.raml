@@ -1,0 +1,154 @@
+#%RAML 0.8
+baseUri: https://mocksvc.mulesoft.com/mocks/7d51b430-cd75-4cde-843c-22761acc1b9e
+#baseUri: https://mocksvc.mulesoft.com/mocks/adb51127-8f0b-4531-9a3a-3600b8c9db26
+title: Okta MFA
+version: v1
+
+/create:
+  post:
+    description: Create an account to get "userId" & test below MFA resources
+    body: 
+      application/json:
+        example: |
+          {
+            "profile": {
+              "firstName": "abc",
+              "lastName": "def",
+              "email": "abc@sid.com",
+              "login": "abc@sid.com",
+              "sports_name_sachin":"somename"
+            }
+          }    
+    responses: 
+      200:
+        body: 
+          application/json:
+            example: |
+                {
+                    "id": "00ubkc6usnNsNm5Yv0h7",
+                    "status": "STAGED",
+                    "profile": {
+                        "lastName": "Brock",
+                        "email": "dineassh2@sid.com",
+                        "login": "dinesah2@sid.com",
+                        "firstName": "dines2asdh"
+                    }
+                }
+/login:
+  post:
+    description: Enter username & password to login and get userId
+    body: 
+      application/json:
+        example: |
+          {
+            "username":"abc@sid.com",
+            "password":"Qwersdf"
+          }    
+    responses: 
+      200:
+        body: 
+          application/json:
+            example: |
+                      {
+                          "status": "SUCCESS",
+                          "userId": "00ubdwg2vfaL4HxZS0h7"
+                      }
+                
+/enroll:
+  post:
+    description: |
+            Get enroll with an MFA Service - Google Totp in our case.
+            In the response you will get an "href" URL. 
+            Open the URL in a new window, it gives an QR Code.
+            Scan it using Google Authenticator to get a "passCode"
+    queryParameters: 
+      userId:
+        description: Enter the userId found after you created an account or logged in
+        required: true
+        type: string
+    body: 
+        application/json:
+            example: |
+                  {
+                    "factorType": "token:software:totp",
+                    "provider": "GOOGLE"
+                  }
+    responses: 
+      200:
+        body: 
+          application/json:
+            example: |
+                     {
+                            "id": "uftbkcduc4dBwmVLZ0h7",
+                            "factorType": "token:software:totp",
+                            "status": "PENDING_ACTIVATION",
+                            "_embedded": {
+                                "activation": {
+                                    "_links": {
+                                        "qrcode": {
+                                            "href": "https://dev-794482.oktapreview.com/api/v1/users/00ubkcezmfncOkeOb0h7/factors/uftbkcduc4dBwmVLZ0h7/qr/20111nEyWsfeWS1NJvUYuebeOlybb5mRf0B9MEzkDLoa3RJr2HDvsBH",
+                                            "type": "image/png"
+                                        }
+                                    }
+                                }
+                            }
+                      }
+/activate:
+  post:
+    description: |
+              After enroll, activate the MFA with this resource
+               Get an "passCode" from google Authenticator.
+              Use that in the body.
+    queryParameters: 
+      userId:
+        description: Enter the userId found in response after you created an account or logged in
+        required: true
+        type: string
+      factorId:
+        description: Enter the "factorid" found in "enroll" resource response as "id"
+        required: true
+        type: string        
+    body: 
+        application/json:
+            example: |
+              {
+                "passCode": "155561" 
+              }  
+    responses: 
+      200:
+        body: 
+          application/json:
+            example: |
+                     {
+                          "provider": "GOOGLE",
+                          "status": "ACTIVE"
+                      }
+/verify:
+  post:
+    description: |
+              After activate, verify the MFA with this resource
+              Get an "passCode" from google Authenticator.
+              Use that in the body.
+    queryParameters: 
+      userId:
+        description: Enter the userId found in response after you created an account or logged in
+        required: true
+        type: string
+      factorId:
+        description: Enter the "factorid" found in "enroll" resource response as "id"
+        required: true
+        type: string        
+    body: 
+        application/json:
+            example: |
+              {
+                "passCode": "155561" 
+              }  
+    responses: 
+      200:
+        body: 
+          application/json:
+            example: |
+                        {
+                            "factorResult": "SUCCESS"
+                        }

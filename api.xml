@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw"
+	xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+    <http:listener-config name="api-httpListenerConfig" host="0.0.0.0" port="8081" doc:name="HTTP Listener Configuration"/>
+    <apikit:config name="api-config" raml="api.raml" consoleEnabled="false" doc:name="Router"/>
+    <http:request-config name="URL" protocol="HTTPS" host="dev-794482.oktapreview.com" port="443" doc:name="HTTP Request Configuration"/>
+    <flow name="api-main">
+        <http:listener config-ref="api-httpListenerConfig" path="/api/*" doc:name="HTTP"/>
+        <apikit:router config-ref="api-config" doc:name="APIkit Router"/>
+        <exception-strategy ref="api-apiKitGlobalExceptionMapping" doc:name="Reference Exception Strategy"/>
+    </flow>
+    <flow name="api-console">
+        <http:listener config-ref="api-httpListenerConfig" path="/console/*" doc:name="HTTP"/>
+        <apikit:console config-ref="api-config" doc:name="APIkit Console"/>
+    </flow>
+    <flow name="post:/enroll:api-config">
+		<http:request config-ref="URL" path="/api/v1/users/{userId}/factors" method="POST" doc:name="HTTP">
+            <http:request-builder>
+                <http:uri-param paramName="userId" value="#[message.inboundProperties.'http.query.params'.userId]"/>
+                <http:header headerName="Accept" value="application/json"/>
+                <http:header headerName="Content-Type" value="application/json"/>
+                <http:header headerName="Authorization" value="SSWS 00ndnRARwtOXVW8bPmbRMVq2CXfAe7VVZtL6cuT2dK"/>
+            </http:request-builder>
+        </http:request>
+        <dw:transform-message doc:name="Transform Message" metadata:id="f95f1b69-e530-4c9e-83e7-f935b2243aa4">
+            <dw:input-payload mimeType="application/json" doc:sample="R:\apigee\PoC-July2017\json.json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	id: payload.id,
+	factorType: payload.factorType,
+	status: payload.status,
+	"_embedded": {
+		activation: {
+			"_links": {
+				qrcode: {
+					href: payload."_embedded".activation."_links".qrcode.href,
+					type: payload."_embedded".activation."_links".qrcode.type
+				}
+			}
+		}
+	}
+}]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+    <flow name="post:/activate:api-config">
+        <http:request config-ref="URL" path="/api/v1/users/{userId}/factors/{factorId}/lifecycle/activate" method="POST" doc:name="HTTP">
+            <http:request-builder>
+                <http:uri-param paramName="userId" value="#[message.inboundProperties.'http.query.params'.userId]"/>
+                <http:uri-param paramName="factorId" value="#[message.inboundProperties.'http.query.params'.factorId]"/>
+                <http:header headerName="Authorization" value="SSWS 00ndnRARwtOXVW8bPmbRMVq2CXfAe7VVZtL6cuT2dK"/>
+                <http:header headerName="Accept" value="application/json"/>
+                <http:header headerName="Content-type" value="application/json"/>
+            </http:request-builder>
+        </http:request>
+        <dw:transform-message doc:name="Transform Message"  metadata:id="e1d9a7e3-3a71-4841-bb21-16855e175009">
+            <dw:input-payload mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	provider: payload.provider,
+	status: payload.status
+}]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+    <flow name="post:/login:api-config">
+        <http:request config-ref="URL" path="/api/v1/authn" method="POST" doc:name="HTTP">
+            <http:request-builder>
+                <http:header headerName="Accept" value="application/json"/>
+                <http:header headerName="Content-type" value="application/json"/>
+            </http:request-builder>
+        </http:request>
+
+                <json:json-to-object-transformer returnClass="java.lang.Object" doc:name="JSON to Object" />
+        <set-session-variable variableName="userId" value="#[message.payload._embedded.user.id]" doc:name="UserId-SessionVars"/>
+        <set-variable variableName="status" value="#[message.payload.status]" doc:name="Variable"/>
+        <choice doc:name="Choice">
+            <when expression="flowVars.status == 'SUCCESS'">
+                <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+                <set-payload value="{ 
+										&quot;status&quot;:&quot;#[flowVars.status]&quot;,
+										&quot;userId&quot;:&quot;#[sessionVars.userId]&quot;
+									}" doc:name="Set Payload"/>
+            </when>
+            <when expression="http.status == 401">
+                <set-payload doc:name="Set Payload" value="{
+    &quot;errorSummary&quot;: &quot;Authentication failed&quot;
+}"/>
+            </when>
+            <otherwise>
+                <set-payload value="{
+										&quot;error&quot;:&quot;invalid credentials&quot;
+									}" doc:name="Set Payload"/>
+            </otherwise>
+        </choice>
+        <logger level="INFO" doc:name="Logger"/>
+    </flow>
+    <flow name="post:/verify:api-config">
+        <http:request config-ref="URL" path="/api/v1/users/{userId}/factors/{factorId}/verify" method="POST" doc:name="HTTP">
+            <http:request-builder>
+                <http:uri-param paramName="userId" value="#[message.inboundProperties.'http.query.params'.userId]"/>
+                <http:uri-param paramName="factorId" value="#[message.inboundProperties.'http.query.params'.factorId]"/>
+                <http:header headerName="Authorization" value="SSWS 00cWGSTKc09evgzlY3maOeqkmiTp7L-ibv3zcKiQ_c"/>
+                <http:header headerName="Accept" value="application/json"/>
+                <http:header headerName="Content-type" value="application/json"/>
+
+            </http:request-builder>
+        </http:request>
+    </flow>
+    <flow name="post:/create:api-config">
+ <http:request config-ref="URL" path="/api/v1/users?activate=false" method="POST" doc:name="HTTP">
+            <http:request-builder>
+                <http:header headerName="Authorization" value="SSWS 00ndnRARwtOXVW8bPmbRMVq2CXfAe7VVZtL6cuT2dK"/>
+                <http:header headerName="Accept" value="application/json"/>
+                <http:header headerName="Content-type" value="application/json"/>
+
+            </http:request-builder>
+        </http:request>
+        <dw:transform-message doc:name="Transform Message" metadata:id="ef72f9b2-c6f7-4008-bd97-d2f4e19b57d6">
+            <dw:input-payload doc:sample="R:\apigee\PoC-July2017\json.json" mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	id: payload.id,
+	status: payload.status,
+	profile: {
+		lastName: payload.profile.lastName,
+		email: payload.profile.email,
+		login: payload.profile.login,
+		firstName: payload.profile.firstName
+	}
+}]]></dw:set-payload>
+        </dw:transform-message>
+        
+    </flow>
+    <apikit:mapping-exception-strategy name="api-apiKitGlobalExceptionMapping">
+        <apikit:mapping statusCode="404">
+            <apikit:exception value="org.mule.module.apikit.exception.NotFoundException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Resource not found&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="405">
+            <apikit:exception value="org.mule.module.apikit.exception.MethodNotAllowedException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Method not allowed&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="415">
+            <apikit:exception value="org.mule.module.apikit.exception.UnsupportedMediaTypeException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Unsupported media type&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="406">
+            <apikit:exception value="org.mule.module.apikit.exception.NotAcceptableException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Not acceptable&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="400">
+            <apikit:exception value="org.mule.module.apikit.exception.BadRequestException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Bad request&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+    </apikit:mapping-exception-strategy>
+</mule>
