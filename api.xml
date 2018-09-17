@@ -20,7 +20,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
         <apikit:console config-ref="api-config" doc:name="APIkit Console"/>
     </flow>
     <flow name="post:/enroll:api-config">
-		<http:request config-ref="URL" path="/api/v1/users/{userId}/factors" method="POST" doc:name="HTTP">
+		<http:request config-ref="URL" path="/api/v1/sid/{userId}/factors" method="POST" doc:name="HTTP">
             <http:request-builder>
                 <http:uri-param paramName="userId" value="#[message.inboundProperties.'http.query.params'.userId]"/>
                 <http:header headerName="Accept" value="application/json"/>
